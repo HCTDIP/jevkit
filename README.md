@@ -156,3 +156,27 @@ python3 track.py --report-only                                          # 看跨
 ## License
 
 MIT
+
+## 决策缓存（同状态同结论）
+
+Jev 的卖点是**确定性**：同一状态、同一问题 → 同一结论。缓存把这句话变成可断言的行为，顺便省钱。
+
+```python
+from jevkit import Client
+
+c = Client(cache_dir="~/.cache/jevkit")      # 或 export JEVKIT_CACHE_DIR=~/.cache/jevkit
+r1 = c.decide(questions, state="…")          # -> {"_cache": "miss"}  真调用
+r2 = c.decide(questions, state="…")          # -> {"_cache": "hit"}   零外呼、零费用
+c.decide(questions, state="…", no_cache=True)  # 显式绕过
+c.cache_stats()                               # {"hits":1,"misses":1,"hit_rate":0.5,...}
+```
+
+- key = `sha256(model + state + questions)`（字典序无关；换模型不串味）
+- 默认**关闭**（不偷偷写磁盘）；`cache_dir=` 或 `JEVKIT_CACHE_DIR` 开启；`JEVKIT_CACHE_TTL` 秒可设过期
+- 实测：第二次同状态调用 `_cache=hit`，**0 外呼**（重复尽调 0 成本）
+
+## 修了什么（v0.2 实测校正）
+
+- `choice()` 旧版发的是 `options` → **HTTP 400**（API 要求 `criteria` record）。现已修正，并向后兼容旧的 `options=[...]` 写法（自动转 `{opt: opt}`）
+- 新增 `score()` + `normalize_score(value, anchors)`：`score` 返回的是**锚点刻度上的期望值**（不是 0-1）
+- `decide()` 增加 `no_cache` 参数，HTTP 层抽成 `_post()`（可替换，便于测试）
