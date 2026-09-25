@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install deps
+        run: pip install pytest
       - name: Unit tests (offline; live tests self-skip without a key)
         run: python -m pytest jevkit/test_jevkit.py -q
       - name: Package installs
