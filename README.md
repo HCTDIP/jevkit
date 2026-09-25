@@ -1,5 +1,8 @@
 # jevkit — Python client for the Jev decision model
 
+> **Project: [Jeveto](https://github.com/HCTDIP/jeveto)** — 置信度门控的 Agent 决策层
+> 生态三仓：**[jeveto](https://github.com/HCTDIP/jeveto)**（编排层）· **jevkit**（决策客户端 · 本仓）· **[jev-calib](https://github.com/HCTDIP/jev-calib)**（决策监控）
+
 > ⚠️ **Disclaimer**: This is a third-party, unofficial wrapper around OpenRouter's
 > Decisions API — not affiliated with, endorsed by, or maintained by OpenRouter or
 > TypeSafe. The API is in alpha and may change without notice.
@@ -10,6 +13,24 @@ The first open-source third-party client for OpenRouter's **Decisions API**
 > Jev answers typed questions with calibrated probabilities — zero text generation.
 > Three primitives: **noul** (yes/no calibrated probability), **choice** (pick one),
 > **score** (scale rating). 70-500ms latency, output tokens free.
+
+---
+
+## 三问闸（Noul / Score / Choice）—— 调用形状（**实测校正版 2026-09-25**）
+
+**三种问题类型都必须带 `criteria`**，且形状各不相同 —— 这是最容易踩的坑：
+
+| type | `criteria` 形状 | 返回 |
+|---|---|---|
+| `noul` | **record** `{"true": 描述, "false": 描述}` | `{"noul": 0.0~1.0}` 校准概率 |
+| `score` | **array** `["锚点0", "锚点1", ...]` | `{"score": 期望锚点序号 0..N-1, "legend": {序号: 锚点}, "probabilities": {...}, "confidence": ...}` |
+| `choice` | **record** `{选项: 描述}`（**键即选项，不需要 `options`**） | `{"choice": 选中键, "probabilities": {...}, "confidence": ...}` |
+
+> ⚠️ **两大坑**（本仓实测，官方 client 未覆盖）：
+> 1. `score` 返回的 `score` **不是 0–1 归一值**，是「期望锚点序号」（5 个锚点 → 0..4）；用前必须 `/(N-1)` 归一化
+> 2. 少传 `criteria` 直接 **HTTP 400**，报错 path 指向 `criteria` —— 可据此反推字段
+
+---
 
 ## Why
 
@@ -26,56 +47,51 @@ slower, uncalibrated, and costs more. Jev is the ultimate classifier:
 
 ```bash
 pip install jevkit   # (after publish — for now: copy the jevkit/ directory)
-export OPENROUTER_API_KEY=<your key>   # free from openrouter.ai
+export OPENROUTER_API_KEY=<your key>   # from openrouter.ai
 ```
 
-## Quickstart
+## Quickstart（三问一次调用，1 个 HTTP 请求）
 
 ```python
 from jevkit import Client, gate
 
-client = Client()  # reads OPENROUTER_API_KEY
+client = Client()   # reads OPENROUTER_API_KEY
 
-# noul — yes/no calibrated probability
-p = client.noul(
-    name="worth_outreach",
-    instructions="Is this lead worth cold outreach?",
-    criteria={
-        "false": "No budget, or the poster is promoting themselves.",
-        "true": "Explicit budget + concrete need, reachable for a pitch.",
-    },
-    state="HN post: [Hiring] N8n automation expert, $2k budget, urgent",
-)
-# → 0.63
-
-# gate — confidence-gated decision (act / confirm / escalate)
-action = gate(p)   # confirm (borderline — flips, don't auto-send)
-
-# choice — pick one from options
+# 一次 decide() 同时问三件事：真伪 + 期望值 + 下一步
 r = client.decide({
-    "category": {
+    "is_real": {
+        "type": "noul",
+        "instructions": "Is this opportunity a genuine paid opportunity?",
+        "criteria": {"true": "real payer with verifiable payment record",
+                     "false": "no payment record / roleplay only / asks for secrets"},
+    },
+    "ev": {
+        "type": "score",
+        "instructions": "Score the expected value.",
+        "criteria": ["1 - not worth it", "2 - weak", "3 - fair", "4 - strong", "5 - excellent"],
+    },
+    "next_step": {
         "type": "choice",
-        "instructions": "What does the customer need?",
-        "options": ["coding", "design", "content", "infra"],
-    }
-}, state="I need someone to build a checkout flow")
-# → {"choice": "coding", "confidence": 0.8, ...}
+        "instructions": "What should we do next?",
+        "criteria": {"submit_now": "we can deliver immediately",
+                     "ask_sponsor": "need clarification first",
+                     "skip": "not worth it"},
+    },
+}, state="<把机会的真实情况写在这里>")
+
+a = r["answers"]
+p    = a["is_real"]["noul"]                      # 校准概率
+ev   = a["ev"]["score"] / 4                      # 归一化（锚点 5 个 → /4）
+step = a["next_step"]["choice"]                  # 选中键
+print(p, ev, step, gate(p))                      # act / confirm / escalate
 ```
 
+跑现成示例：
 
-# score — scale rating
-r = client.decide({
-    "urgency": {
-        "type": "score",
-        "instructions": "How urgent is this?",
-        "legend": {
-            "0": "Can wait",
-            "1": "This week",
-            "2": "Blocking revenue now",
-        },
-    }
-}, state="Payments are failing for customers right now")
-# → {"confidence": 0.99, "legend": {...}, ...}
+```bash
+export OPENROUTER_API_KEY=sk-or-...
+python3 examples/three_questions.py
+```
 
 ## CLI
 
@@ -88,10 +104,11 @@ jevkit decide questions.json --state "..."              # → full answers
 ## Gotchas (learned the hard way)
 
 1. `questions` expects a **record** (`{name: {...}}`), not an array
-2. noul's `criteria` is `{"true": str, "false": str}` — descriptions, not options
-3. The response is `answers.{name}.noul` — not a top-level probability
-4. **Borderline probabilities flip** — never auto-act on 0.5-0.7, gate them
-5. noul(false) + noul(true) don't have to sum to 1
+2. **三种类型都要 `criteria`**：noul=record / score=array / choice=record（见上表）
+3. `score` 返回的是**锚点序号**，不是 0–1（必须归一化）
+4. The response is `answers.{name}.noul` — not a top-level probability
+5. **Borderline probabilities flip** — never auto-act on 0.5-0.7, gate them
+6. noul(false) + noul(true) don't have to sum to 1
 
 ## The gate pattern
 
@@ -106,7 +123,6 @@ elif action == "confirm":
     queue_for_review()        # borderline → human or System 2 (LLM review)
 ```
 
-
 Default thresholds: `act >= 0.7`, `confirm >= 0.5` — tuned for the "borderline
 flips" property (never auto-act in 0.5-0.7). Override per use case:
 
@@ -118,11 +134,22 @@ System 1 (Jev) decides **who/what to act on**; System 2 (a chat model) handles
 **the acting itself** (writing, reasoning). This division keeps costs low and
 decisions calibrated.
 
+## 监控入口（校准漂移）
+
+决策质量要盯 —— 姊妹仓 **[jev-calib](https://github.com/HCTDIP/jev-calib)** 跑同一 state N 次，测可重复性、检漂移、留漂移账本：
+
+```bash
+git clone https://github.com/HCTDIP/jev-calib && cd jev-calib
+PYTHONPATH=../jevkit python3 jev_calib.py --config cases.json --runs 5   # 真跑
+python3 track.py --report-only                                          # 看跨轮漂移趋势
+```
+
 ## Status
 
 - ✅ Client + CLI + gate pattern (validated with real API calls, R3 read-back)
+- ✅ Score / Choice 调用形状实测校正（criteria 形状 + 锚点序号陷阱）
 - ✅ Error handling: RuntimeError on HTTP errors (fallback-friendly)
-- 🚧 Tests + CI (in progress)
+- 🚧 Tests + CI
 
 ## License
 
