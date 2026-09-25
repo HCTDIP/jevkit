@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jevkit"
+version = "0.2.0"
+description = "Unofficial Python client for OpenRouter's Decisions API (TypeSafe Jev) - calibrated probabilities, not chat"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "HCTDIP" }]
+keywords = ["jev", "decision", "calibration", "llm", "openrouter", "confidence", "gate", "noul", "score", "choice"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+jevkit = "jevkit.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/HCTDIP/jevkit"
+Repository = "https://github.com/HCTDIP/jevkit"
+"Ecosystem: orchestration" = "https://github.com/HCTDIP/jeveto"
+"Ecosystem: monitoring" = "https://github.com/HCTDIP/jev-calib"
+
+[tool.setuptools]
+packages = ["jevkit"]
+
+[tool.pytest.ini_options]
+testpaths = ["jevkit"]

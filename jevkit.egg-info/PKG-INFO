@@ -1,3 +1,25 @@
+Metadata-Version: 2.4
+Name: jevkit
+Version: 0.2.0
+Summary: Unofficial Python client for OpenRouter's Decisions API (TypeSafe Jev) - calibrated probabilities, not chat
+Author: HCTDIP
+License: MIT
+Project-URL: Homepage, https://github.com/HCTDIP/jevkit
+Project-URL: Repository, https://github.com/HCTDIP/jevkit
+Project-URL: Ecosystem: orchestration, https://github.com/HCTDIP/jeveto
+Project-URL: Ecosystem: monitoring, https://github.com/HCTDIP/jev-calib
+Keywords: jev,decision,calibration,llm,openrouter,confidence,gate,noul,score,choice
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Dynamic: license-file
+
 # jevkit — Python client for the Jev decision model
 
 [![CI](https://github.com/HCTDIP/jevkit/actions/workflows/ci.yml/badge.svg)](https://github.com/HCTDIP/jevkit/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![PyPI](https://img.shields.io/badge/pip%20install-jevkit-blue)](https://github.com/HCTDIP/jevkit)

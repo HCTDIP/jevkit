@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Unit tests (offline; live tests self-skip without a key)
+        run: python -m pytest jevkit/test_jevkit.py -q
+      - name: Package installs
+        run: |
+          pip install .
+          python -c "import jevkit, jevkit.client; print('import OK', jevkit.__name__)"
+          jevkit --help
+      - name: CLI offline path
+        run: python -m jevkit.cli gate 0.63
